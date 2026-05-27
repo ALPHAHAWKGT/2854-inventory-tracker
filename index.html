@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRC Team Inventory Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+
+    <header class="bg-black text-white p-6 shadow-md border-b-4 border-[#008080]">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-wider uppercase">
+                <span class="text-[#008080]">FRC 2854</span> Inventory Manager
+            </h1>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8 space-y-6">
+        
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="text-sm font-medium text-gray-700">
+                <span class="text-black font-bold uppercase tracking-wider text-xs bg-gray-100 px-2 py-1 rounded mr-2">Access Control</span> 
+                Enter the management PIN to log new team or school assets.
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <input type="password" id="adminPinInput" placeholder="Enter Access PIN" class="p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#008080] w-full sm:w-48">
+                <button onclick="verifyAdminPin()" class="bg-black hover:bg-gray-800 text-white font-bold px-5 py-2 rounded text-sm cursor-pointer transition duration-200 whitespace-nowrap">
+                    Unlock Panel
+                </button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div id="formContainer" class="hidden lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200 transition-all duration-300">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 class="text-xl font-bold text-black">Add New Asset</h2>
+                    <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">Authorized Mode</span>
+                </div>
+                <form id="inventoryForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Item Name</label>
+                        <input type="text" id="itemName" required class="mt-1 block w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#008080]">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Price ($)</label>
+                        <input type="number" id="itemPrice" step="0.01" required class="mt-1 block w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#008080]">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Ownership</label>
+                        <select id="itemOwnership" required class="mt-1 block w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#008080]">
+                            <option value="Team Owned">Team Owned</option>
+                            <option value="School Owned">School Owned</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Funding Account / PO</label>
+                        <input type="text" id="itemAccount" placeholder="e.g., Main Grant, District, Sponsor X" required class="mt-1 block w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-[#008080]">
+                    </div>
+                    <div class="md:col-span-2 pt-2">
+                        <button type="submit" class="w-full bg-[#008080] hover:bg-[#006666] text-white font-bold p-3 rounded transition duration-200 uppercase tracking-wide cursor-pointer">
+                            Log Item & Generate QR Code
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col items-center justify-between min-h-[320px]">
+                <div class="w-full text-center">
+                    <h2 class="text-xl font-bold mb-2 text-black">Active QR Code</h2>
+                    <p class="text-xs text-gray-500 mb-4">Ready to print and stick on tools</p>
+                </div>
+                
+                <div id="qrcode" class="p-4 bg-white border-2 border-dashed border-gray-300 rounded flex items-center justify-center min-h-[160px] min-w-[160px]">
+                    <span class="text-gray-400 text-sm text-center px-4">Add an item or click "View/Print QR" below</span>
+                </div>
+
+                <div class="w-full text-center mt-4">
+                    <p id="qrLabel" class="text-sm font-mono font-bold text-gray-700 truncate mb-2"></p>
+                    <button onclick="printQRCode()" id="printBtn" class="hidden w-full border border-black text-black hover:bg-black hover:text-white font-semibold py-2 px-4 rounded transition duration-200 text-sm cursor-pointer">
+                        Print QR Label
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h2 class="text-xl font-bold text-black">Current Inventory</h2>
+                <input type="text" id="searchInput" onkeyup="filterInventory()" placeholder="Search items, owners, or accounts..." class="p-2 border border-gray-300 rounded w-full sm:w-64 text-sm focus:outline-none focus:border-[#008080]">
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 text-left">
+                    <thead class="bg-black text-white text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="px-6 py-3">Asset ID</th>
+                            <th class="px-6 py-3">Item Name</th>
+                            <th class="px-6 py-3">Price</th>
+                            <th class="px-6 py-3">Ownership</th>
+                            <th class="px-6 py-3">Funding Source</th>
+                            <th class="px-6 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody" class="divide-y divide-gray-200 text-sm">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Local storage setup keeps track of assets across browser refreshes and closures
+        let inventory = JSON.parse(localStorage.getItem('frc_inventory')) || [];
+        let qrElement = document.getElementById('qrcode');
+
+        // Verify top bar access PIN to show/hide creation panel
+        function verifyAdminPin() {
+            const inputVal = document.getElementById('adminPinInput').value;
+            const formContainer = document.getElementById('formContainer');
+
+            if (inputVal === "1234") {
+                formContainer.classList.remove('hidden');
+                alert("Access approved. The 'Add New Asset' module is now available.");
+            } else {
+                formContainer.classList.add('hidden');
+                alert("Invalid PIN code. Access denied.");
+            }
+        }
+
+        // Form submission logic
+        document.getElementById('inventoryForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('itemName').value;
+            const price = parseFloat(document.getElementById('itemPrice').value).toFixed(2);
+            const ownership = document.getElementById('itemOwnership').value;
+            const account = document.getElementById('itemAccount').value;
+            
+            // Creates a unique asset tracking string
+            const assetId = `FRC-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+
+            const newItem = { assetId, name, price, ownership, account };
+            inventory.push(newItem);
+            
+            saveAndRefresh();
+            generateQR(assetId, name);
+            this.reset();
+        });
+
+        function saveAndRefresh() {
+            localStorage.setItem('frc_inventory', JSON.stringify(inventory));
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+
+            if (inventory.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No tools or stock logged yet.</td></tr>`;
+                return;
+            }
+
+            inventory.forEach((item, index) => {
+                const ownerBadge = item.ownership === 'School Owned' 
+                    ? `<span class="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-200">School Owned</span>`
+                    : `<span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-emerald-200">Team Owned</span>`;
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 font-mono font-bold text-xs text-gray-600">${item.assetId}</td>
+                        <td class="px-6 py-4 font-semibold text-gray-900">${item.name}</td>
+                        <td class="px-6 py-4">$${item.price}</td>
+                        <td class="px-6 py-4">${ownerBadge}</td>
+                        <td class="px-6 py-4 text-gray-600">${item.account}</td>
+                        <td class="px-6 py-4 text-right space-x-3">
+                            <button onclick="viewQR('${item.assetId}', '${item.name}')" class="text-[#008080] hover:text-[#006666] font-bold text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded transition cursor-pointer">
+                                View/Print QR
+                            </button>
+                            <button onclick="deleteItem(${index})" class="text-red-600 hover:text-red-800 font-bold text-xs cursor-pointer">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function generateQR(id, name) {
+            qrElement.innerHTML = ''; // Clear out default text or old QR
+            
+            // Build the fresh QR code structure safely inside the target box
+            new QRCode(qrElement, {
+                text: id,
+                width: 140,
+                height: 140,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('qrLabel').innerText = `${name} (${id})`;
+            document.getElementById('printBtn').classList.remove('hidden');
+        }
+
+        function viewQR(id, name) {
+            generateQR(id, name);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteItem(index) {
+            // Ask for deletion verification PIN
+            const pin = prompt("Admin Action: Please enter the 4-digit deletion authorization PIN:");
+            
+            if (pin === "3097") {
+                if (confirm("PIN verified. Are you sure you want to permanently delete this asset record?")) {
+                    inventory.splice(index, 1);
+                    saveAndRefresh();
+                }
+            } else if (pin !== null) {
+                alert("Incorrect authorization code. Deletion canceled.");
+            }
+        }
+
+        function filterInventory() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.getElementById('inventoryTableBody').getElementsByTagName('tr');
+
+            for (let i = 0; i < rows.length; i++) {
+                const text = rows[i].textContent.toLowerCase();
+                rows[i].style.display = text.includes(input) ? "" : "none";
+            }
+        }
+
+        function printQRCode() {
+            const qrHtml = qrElement.innerHTML;
+            const labelText = document.getElementById('qrLabel').innerText;
+            
+            const printWindow = window.open('', '_blank', 'width=400,height=400');
+            
+            // Injecting markup straight to document body to avoid breaking code parsers
+            printWindow.document.body.innerHTML = `
+                <style>
+                    body { font-family: monospace; text-align: center; padding: 20px; }
+                    .qr-wrap { display: inline-block; padding: 10px; border: 1px solid #000; }
+                    p { font-size: 12px; margin-top: 10px; font-weight: bold; }
+                </style>
+                <div class="qr-wrap">${qrHtml}</div>
+                <p>${labelText}</p>
+            `;
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        }
+
+        // Render existing inventory directly from localStorage on boot
+        renderTable();
+    </script>
+</body>
+</html>
