@@ -22,11 +22,11 @@
         <div class="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="text-sm font-medium text-gray-700">
                 <span class="text-black font-bold uppercase tracking-wider text-xs bg-gray-100 px-2 py-1 rounded mr-2">Access Control</span> 
-                Enter PIN to log new assets: <span id="pinStatus" class="ml-2 font-semibold text-gray-500">Awaiting...</span>
+                Enter the management PIN to log new team or school assets.
             </div>
             <div class="flex gap-2 w-full sm:w-auto">
                 <input type="password" id="adminPinInput" placeholder="Enter Access PIN" class="p-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#008080] w-full sm:w-48">
-                <button id="unlockBtn" type="button" class="bg-black hover:bg-gray-800 text-white font-bold px-5 py-2 rounded text-sm cursor-pointer transition duration-200 whitespace-nowrap">
+                <button onclick="verifyAdminPin()" class="bg-black hover:bg-gray-800 text-white font-bold px-5 py-2 rounded text-sm cursor-pointer transition duration-200 whitespace-nowrap">
                     Unlock Panel
                 </button>
             </div>
@@ -34,7 +34,7 @@
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <div id="formContainer" style="display: none;" class="lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200">
+            <div id="formContainer" class="hidden lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200 transition-all duration-300">
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
                     <h2 class="text-xl font-bold text-black">Add New Asset</h2>
                     <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">Authorized Mode</span>
@@ -79,7 +79,7 @@
 
                 <div class="w-full text-center mt-4">
                     <p id="qrLabel" class="text-sm font-mono font-bold text-gray-700 truncate mb-2"></p>
-                    <button id="printBtn" class="hidden w-full border border-black text-black hover:bg-black hover:text-white font-semibold py-2 px-4 rounded transition duration-200 text-sm cursor-pointer">
+                    <button onclick="printQRCode()" id="printBtn" class="hidden w-full border border-black text-black hover:bg-black hover:text-white font-semibold py-2 px-4 rounded transition duration-200 text-sm cursor-pointer">
                         Print QR Label
                     </button>
                 </div>
@@ -88,8 +88,8 @@
 
         <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
             <div class="p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h2 class="text-xl font-bold text-black">Live Inventory</h2>
-                <input type="text" id="searchInput" placeholder="Search items, owners, or accounts..." class="p-2 border border-gray-300 rounded w-full sm:w-64 text-sm focus:outline-none focus:border-[#008080]">
+                <h2 class="text-xl font-bold text-black">Current Inventory</h2>
+                <input type="text" id="searchInput" onkeyup="filterInventory()" placeholder="Search items, owners, or accounts..." class="p-2 border border-gray-300 rounded w-full sm:w-64 text-sm focus:outline-none focus:border-[#008080]">
             </div>
             
             <div class="overflow-x-auto">
@@ -111,162 +111,60 @@
         </div>
     </main>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyD1dVrjOK5vi8oQ8TAc9HJNCHe2NnN8YVI",
-            authDomain: "frc-2854-inventory.firebaseapp.com",
-            databaseURL: "https://frc-2854-inventory-default-rtdb.firebaseio.com",
-            projectId: "frc-2854-inventory",
-            storageBucket: "frc-2854-inventory.firebasestorage.app",
-            messagingSenderId: "281060732885",
-            appId: "1:281060732885:web:a6a7aa2d75112fe2d1175c",
-            measurementId: "G-RB70FRQ3F9"
-        };
-
-        // Initialize Firebase connection
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const inventoryRef = ref(db, 'team_inventory');
-
-        let globalInventory = []; 
+    <script>
+        // Local storage setup keeps track of assets across browser refreshes and closures
+        let inventory = JSON.parse(localStorage.getItem('frc_inventory')) || [];
         let qrElement = document.getElementById('qrcode');
 
-        // ==========================================
-        // SAFE INITIALIZATION LOGIC
-        // ==========================================
-        function initApp() {
-            const unlockBtn = document.getElementById('unlockBtn');
-            const searchInput = document.getElementById('searchInput');
-            const printBtn = document.getElementById('printBtn');
-            const inventoryForm = document.getElementById('inventoryForm');
+        // Verify top bar access PIN to show/hide creation panel
+        function verifyAdminPin() {
+            const inputVal = document.getElementById('adminPinInput').value;
+            const formContainer = document.getElementById('formContainer');
 
-            if (unlockBtn) {
-                unlockBtn.addEventListener('click', function(e) {
-                    e.preventDefault(); // Prevent unexpected form submissions or browser bubbling
-                    const inputVal = document.getElementById('adminPinInput').value;
-                    const formContainer = document.getElementById('formContainer');
-                    const pinStatus = document.getElementById('pinStatus');
-
-                    if (inputVal === "1009") {
-                        formContainer.style.display = 'block';
-                        pinStatus.textContent = "✅ Access Approved";
-                        pinStatus.className = "ml-2 font-semibold text-emerald-600";
-                    } else {
-                        formContainer.style.display = 'none';
-                        pinStatus.textContent = "❌ Invalid PIN";
-                        pinStatus.className = "ml-2 font-semibold text-red-600";
-                    }
-                });
+            if (inputVal === "1009") {
+                formContainer.classList.remove('hidden');
+                alert("Access approved. The 'Add New Asset' module is now available.");
+            } else {
+                formContainer.classList.add('hidden');
+                alert("Invalid PIN code. Access denied.");
             }
-
-            if (searchInput) {
-                searchInput.addEventListener('keyup', function() {
-                    const input = this.value.toLowerCase();
-                    const rows = document.getElementById('inventoryTableBody').getElementsByTagName('tr');
-
-                    for (let i = 0; i < rows.length; i++) {
-                        const text = rows[i].textContent.toLowerCase();
-                        rows[i].style.display = text.includes(input) ? "" : "none";
-                    }
-                });
-            }
-
-            if (inventoryForm) {
-                inventoryForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const name = document.getElementById('itemName').value;
-                    const price = parseFloat(document.getElementById('itemPrice').value).toFixed(2);
-                    const ownership = document.getElementById('itemOwnership').value;
-                    const account = document.getElementById('itemAccount').value;
-                    
-                    const assetId = `FRC-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-
-                    const newItem = { assetId, name, price, ownership, account };
-                    
-                    const newItemRef = push(inventoryRef);
-                    set(newItemRef, newItem);
-                    
-                    generateQR(assetId, name);
-                    this.reset();
-                });
-            }
-
-            if (printBtn) {
-                printBtn.addEventListener('click', function() {
-                    const qrHtml = qrElement.innerHTML;
-                    const labelText = document.getElementById('qrLabel').innerText;
-                    const printWindow = window.open('', '_blank', 'width=400,height=400');
-                    
-                    printWindow.document.body.innerHTML = `
-                        <style>
-                            body { font-family: monospace; text-align: center; padding: 20px; }
-                            .qr-wrap { display: inline-block; padding: 10px; border: 1px solid #000; }
-                            p { font-size: 12px; margin-top: 10px; font-weight: bold; }
-                        </style>
-                        <div class="qr-wrap">${qrHtml}</div>
-                        <p>${labelText}</p>
-                    `;
-                    
-                    setTimeout(() => {
-                        printWindow.print();
-                        printWindow.close();
-                    }, 250);
-                });
-            }
-
-            // Fetch live database assets immediately on start
-            onValue(inventoryRef, (snapshot) => {
-                globalInventory = [];
-                if (snapshot.exists()) {
-                    snapshot.forEach((childSnapshot) => {
-                        globalInventory.push({
-                            dbKey: childSnapshot.key,
-                            ...childSnapshot.val()
-                        });
-                    });
-                }
-                renderTable();
-            });
         }
 
-        // ==========================================
-        // GLOBAL NAMESPACE ATTACHMENTS
-        // ==========================================
-        window.deleteItem = function(dbKey) {
-            const pin = prompt("Admin Action: Please enter the 4-digit deletion authorization PIN:");
-            if (pin === "3097") {
-                if (confirm("PIN verified. Are you sure you want to permanently delete this asset globally?")) {
-                    const itemToRemoveRef = ref(db, 'team_inventory/' + dbKey);
-                    remove(itemToRemoveRef);
-                }
-            } else if (pin !== null) {
-                alert("Incorrect authorization code. Deletion canceled.");
-            }
-        };
+        // Form submission logic
+        document.getElementById('inventoryForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('itemName').value;
+            const price = parseFloat(document.getElementById('itemPrice').value).toFixed(2);
+            const ownership = document.getElementById('itemOwnership').value;
+            const account = document.getElementById('itemAccount').value;
+            
+            // Creates a unique asset tracking string
+            const assetId = `FRC-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
-        window.viewQR = function(id, name) {
-            generateQR(id, name);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
+            const newItem = { assetId, name, price, ownership, account };
+            inventory.push(newItem);
+            
+            saveAndRefresh();
+            generateQR(assetId, name);
+            this.reset();
+        });
 
-        // ==========================================
-        // RENDER & UTILITY FUNCTIONS
-        // ==========================================
+        function saveAndRefresh() {
+            localStorage.setItem('frc_inventory', JSON.stringify(inventory));
+            renderTable();
+        }
+
         function renderTable() {
             const tbody = document.getElementById('inventoryTableBody');
-            if (!tbody) return;
             tbody.innerHTML = '';
 
-            if (globalInventory.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No tools or stock logged yet. Database is empty.</td></tr>`;
+            if (inventory.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No tools or stock logged yet.</td></tr>`;
                 return;
             }
 
-            globalInventory.forEach((item) => {
+            inventory.forEach((item, index) => {
                 const ownerBadge = item.ownership === 'School Owned' 
                     ? `<span class="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-200">School Owned</span>`
                     : `<span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-emerald-200">Team Owned</span>`;
@@ -279,10 +177,10 @@
                         <td class="px-6 py-4">${ownerBadge}</td>
                         <td class="px-6 py-4 text-gray-600">${item.account}</td>
                         <td class="px-6 py-4 text-right space-x-3">
-                            <button onclick="window.viewQR('${item.assetId}', '${item.name}')" class="text-[#008080] hover:text-[#006666] font-bold text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded transition cursor-pointer">
+                            <button onclick="viewQR('${item.assetId}', '${item.name}')" class="text-[#008080] hover:text-[#006666] font-bold text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded transition cursor-pointer">
                                 View/Print QR
                             </button>
-                            <button onclick="window.deleteItem('${item.dbKey}')" class="text-red-600 hover:text-red-800 font-bold text-xs cursor-pointer">
+                            <button onclick="deleteItem(${index})" class="text-red-600 hover:text-red-800 font-bold text-xs cursor-pointer">
                                 Delete
                             </button>
                         </td>
@@ -292,7 +190,9 @@
         }
 
         function generateQR(id, name) {
-            qrElement.innerHTML = ''; 
+            qrElement.innerHTML = ''; // Clear out default text or old QR
+            
+            // Build the fresh QR code structure safely inside the target box
             new QRCode(qrElement, {
                 text: id,
                 width: 140,
@@ -301,12 +201,65 @@
                 colorLight : "#ffffff",
                 correctLevel : QRCode.CorrectLevel.H
             });
+
             document.getElementById('qrLabel').innerText = `${name} (${id})`;
             document.getElementById('printBtn').classList.remove('hidden');
         }
 
-        // Run setup routine safely when the modern script module loads
-        initApp();
+        function viewQR(id, name) {
+            generateQR(id, name);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteItem(index) {
+            // Ask for deletion verification PIN
+            const pin = prompt("Admin Action: Please enter the 4-digit deletion authorization PIN:");
+            
+            if (pin === "3097") {
+                if (confirm("PIN verified. Are you sure you want to permanently delete this asset record?")) {
+                    inventory.splice(index, 1);
+                    saveAndRefresh();
+                }
+            } else if (pin !== null) {
+                alert("Incorrect authorization code. Deletion canceled.");
+            }
+        }
+
+        function filterInventory() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.getElementById('inventoryTableBody').getElementsByTagName('tr');
+
+            for (let i = 0; i < rows.length; i++) {
+                const text = rows[i].textContent.toLowerCase();
+                rows[i].style.display = text.includes(input) ? "" : "none";
+            }
+        }
+
+        function printQRCode() {
+            const qrHtml = qrElement.innerHTML;
+            const labelText = document.getElementById('qrLabel').innerText;
+            
+            const printWindow = window.open('', '_blank', 'width=400,height=400');
+            
+            // Injecting markup straight to document body to avoid breaking code parsers
+            printWindow.document.body.innerHTML = `
+                <style>
+                    body { font-family: monospace; text-align: center; padding: 20px; }
+                    .qr-wrap { display: inline-block; padding: 10px; border: 1px solid #000; }
+                    p { font-size: 12px; margin-top: 10px; font-weight: bold; }
+                </style>
+                <div class="qr-wrap">${qrHtml}</div>
+                <p>${labelText}</p>
+            `;
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        }
+
+        // Render existing inventory directly from localStorage on boot
+        renderTable();
     </script>
 </body>
 </html>
